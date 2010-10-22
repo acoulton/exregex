@@ -33,7 +33,7 @@ defined('SYSPATH') or die('No direct script access.');
  * @category   Base
  * @author     Andrew Coulton
  * @copyright  (c) 2010 Andrew Coulton
- * @license    http://kohanaphp.com/license
+ * @license    http://kohanaframework.org/license
  */
 class Andrewc_Exregex_Numeric {
 
