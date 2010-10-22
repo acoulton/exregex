@@ -7,22 +7,25 @@ defined('SYSPATH') or die('No direct script access.');
  * only implements support for dynamic compilation of numeric range expressions
  * within the regex pattern.
  *
- * # Numeric range support
+ * ### Numeric range support
  * The normal regex syntax is extended to support testing for numeric values within
- * a given range. For example the pattern /^#00001-00234#$/ will be compiled into a
- * regex that matches any number in the range 00001-00234.
+ * a given range. For example:
+ * Pattern | Matches
+ * --------|------------
+ * /^#00001-00234#$/ | Any number between 00001 and 00234 inclusive
+ * /^myref-(#15-98#)$/ | Any string of the form "myref-##" where ## between 15 and 98. The numeric portion is returned as a capture group
  *
- * This regex can be returned by the [Exregex_Numeric::get_compiled_pattern()]
- * method, or for convenience can be directly tested with the [Exregex_Numeric::match()]
- * and [Exregex_Numeric::replace()] methods which are wrappers for the preg_match
+ * This regex can be returned by the [Exregex_Numeric::get_compiled_pattern]
+ * method, or for convenience can be directly tested with the [Exregex_Numeric::match]
+ * and [Exregex_Numeric::replace] methods which are wrappers for the preg_match
  * and preg_replace functions.
  *
- * [!!] Currently, all numbers must be given as equal length strings left-padded with zeroes.
+ * [!!] Currently, all numbers must be given as equal length strings left-padded with zeroes if required.
  *
- * # Configuration Options
+ * ### Configuration Options
  * Configuration is controlled by exregex.php, although key options can also be set
  * with the relevant instance methods.
- * Group           | Parameter | Type   | Default | Behaviour
+ * Group           |Parameter  |Type    |Default  |Behaviour
  * ----------------|-----------|--------|---------|----------
  * exregex_numeric | delimiter | string | #       | The character used to start and finish number ranges
  *
@@ -35,27 +38,28 @@ defined('SYSPATH') or die('No direct script access.');
 class Andrewc_Exregex_Numeric {
 
     /**
-     * The delimiter character used to top and tail number ranges
-     * @var string
+     * @var string The delimiter character used to top and tail number ranges
      */
     protected $_delimiter = null;
 
     /**
-     * The raw user-supplied pattern
-     * @var string
+     * @var string The raw user-supplied pattern
      */
     protected $_raw_pattern = null;
 
     /**
-     * The compiled pattern
-     * @var string
+     * @var string The compiled pattern
      */
     protected $_compiled_pattern = null;
 
     /**
      * Returns a new instance of Exregex_Numeric based on the supplied pattern
+     *
+     *     $regex = Exregex_Numeric::factory('/^#0005-3024#$/')
+     *                  ->get_compiled_pattern();
+     *
      * @param string $pattern
-     * @return Exregex_Numeric
+     * @return Exregex_Numeric The instance for chaining
      */
     public static function factory($pattern) {
         return new Exregex_Numeric($pattern);
@@ -64,6 +68,9 @@ class Andrewc_Exregex_Numeric {
     /**
      * Creates an instance of Exregex_Numeric
      * ready for use.
+     *
+     *     $regex = new Exregex_Numeric('/^#2303-5093#$/');
+     *
      * @param string $pattern
      * @return Exregex_Numeric
      */
@@ -74,36 +81,26 @@ class Andrewc_Exregex_Numeric {
     }
 
     /**
-     * Wrapper for preg_match, using the compiled regex
-     * @link http://php.net/manual/en/function.preg-match.php
-     *
+     * Wrapper for [preg_match](http://php.net/manual/en/function.preg-match.php), using the compiled regex
      * @param string $subject The input string.
      * @param array $matches [optional] If provided, then filled with the results of search.
      * @param int $flags [optional]
-     * flags can be the following flag:
-     * PREG_OFFSET_CAPTURE
-     * If this flag is passed, for every occurring match the appendant string
-     * offset will also be returned. Note that this changes the value of
-     * matches into an array where every element is an
-     * array consisting of the matched string at offset 0
-     * and its string offset into subject at offset
-     * 1.
      * @param int $offset [optional] Byte-position from where to start the search
      * @return int Returns the number of times pattern matches.
      */
-    public function match($subject, &$matches=nullarray, $flags=null, $offset=null) {
+    public function match($subject, &$matches=null, $flags=null, $offset=null) {
         $pattern = $this->get_compiled_pattern();
         return preg_match($pattern, $subject, $matches, $flags, $offset);
     }
 
     /**
-     * Wrapper for preg_replace using the compiled pattern
-     * @link http://php.net/manual/en/function.preg-replace.php
+     * Wrapper for [preg_replace](http://php.net/manual/en/function.preg-replace.php) using the compiled pattern
      * @param mixed $replacement The string or an array with strings to replace.
      * @param mixed $subject The string or an array with strings to search and replace.
      * @param int $limit [optional] The maximum possible replacements for each pattern in each subject string.
      * @param int $count [optional] If specified, this variable will be filled with the number of replacements done.
-     * @return mixed returns an array if the subject parameter is an array, or a string otherwise.
+     * @return array if the subject is an array
+     * @return string if the subject is a string
      */
     public function replace($replacement, $subject, $limit=null, &$count=null) {
         $pattern = $this->get_compiled_pattern();
@@ -111,9 +108,12 @@ class Andrewc_Exregex_Numeric {
     }
 
     /**
-     * Sets a new pattern value - supports fluid interface
+     * Sets a new pattern value
+     *
+     *     $regex->set_pattern($pattern);
+     *
      * @param string $pattern
-     * @return Andrewc_Exregex_Numeric
+     * @return Andrewc_Exregex_Numeric The instance for chaining
      */
     public function set_pattern($pattern) {
         $this->_raw_pattern = $pattern;
@@ -123,8 +123,11 @@ class Andrewc_Exregex_Numeric {
 
     /**
      * Sets a new range delimiter - will reset the compiled pattern - supports fluid interface
+     *
+     *     $regex->set_delimiter('%');
+     *
      * @param string $delimiter
-     * @return Andrewc_Exregex_Numeric
+     * @return Andrewc_Exregex_Numeric The instance for chaining
      */
     public function set_delimiter($delimiter){
         $this->_delimiter = $delimiter;
@@ -134,7 +137,10 @@ class Andrewc_Exregex_Numeric {
 
     /**
      * Returns the compiled pattern, with all numeric ranges replaced with full regexes
-     * @return string
+     *
+     *     $pattern = $regex->get_compiled_pattern();
+     *
+     * @return string The compiled pattern
      */
     public function get_compiled_pattern() {
         if ($this->_compiled_pattern) {
