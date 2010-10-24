@@ -76,7 +76,7 @@ class Andrewc_Exregex_Numeric {
      */
     public function __construct($pattern) {
         $config = Kohana::config('exregex');
-        $this->_delimiter = $config->exregex_numeric->delimiter;
+        $this->_delimiter = $config['exregex_numeric']['delimiter'];
         $this->_raw_pattern = $pattern;
     }
 
