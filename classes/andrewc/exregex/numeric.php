@@ -146,26 +146,21 @@ class Andrewc_Exregex_Numeric {
         }
 
         //compile the pattern
+        print_r("<pre>");
         $range_pattern = "/" . $this->_delimiter . "([0-9]+-[0-9]+)" . $this->_delimiter . "/";
         if (preg_match_all($range_pattern, $this->_raw_pattern, $matchesarray, PREG_SET_ORDER)) {
             //get all ranges, compile each and replace in the pattern
             foreach ($matchesarray as $match_range) {
                 list($from, $to) = explode('-', $match_range[1]);
                 $this->_compiled_pattern = str_replace($match_range[0],
-                                "(" . trim($this->compile_range($from, $to),"|") . ")",
+                                $this->compile_range($from, $to),
                                 $this->_raw_pattern);
             }
         }
+        print_r("</pre>");
+        print_r("<p><em>$this->_compiled_pattern<em></p>");
         return $this->_compiled_pattern;
     }
-
-    /**
-     * Recursive function that compiles a numeric range into a regex pattern.
-     * @param string $from The lower limit of the range
-     * @param string $to The upper limit of the range
-     * @param string $first_recursion Whether this is the first recursion
-     * @return string The compiled pattern
-     */
 
     /**
      * Recursive function that compiles a numeric range into a regex pattern.
@@ -174,62 +169,126 @@ class Andrewc_Exregex_Numeric {
      * @param string $regex Internal param used during recursion to pass the pattern as built
      * @return string
      */
-    protected function compile_range($range_from, $range_to, $regex = "") {
-        if ($range_from == $range_to) {
-            return $regex . $range_from;
+    protected function compile_range($range_from, $range_to) {
+        //setup if we are the first recursion
+        static $recurse_level = 0;
+        static $regex = array();
+        static $number_len = null;
+        static $first_call=0;
+        if ($first_call == 0) {
+            $first_call = time();
         }
 
-        //get the common part of the string eg 003(128 - 549) 003(128-249)
-        $common = "";
-        $len = strlen($range_from);
-        for ($i = 0; $i < $len; $i++) {
-            if (substr($range_from, $i, 1) == substr($range_to, $i, 1)) {
-                $common .= substr($range_from, $i, 1);
-            } else {
-                break;
+        if ($first_call < (time() - 5)) {
+            die ("Timeout");
+        }
+
+        if ($recurse_level > 50) {
+            throw new Exception("Recurse $recurse_level");
+        }
+        //reset if first level
+        if ($recurse_level == 0) {
+            $first_recursion = true;
+            $regex = array();
+            $number_len = max(array(strlen($range_from),
+                                    strlen($range_to)));
+        } else {
+            $first_recursion = false;
+        }
+
+        //pad with leading zeroes
+        $range_from = str_pad($range_from, $number_len, "0", STR_PAD_LEFT);
+        $range_to = str_pad($range_to, $number_len, "0", STR_PAD_LEFT);
+
+        $recurse_level++;
+        print_r("L$recurse_level - called $range_from:$range_to - \r\n");
+        
+        /*
+         * Try to express the range as a regex. We can do this if:
+         *  - less than 10 difference and no digit rollover OR
+         *  - $range_from % 10 == 0 AND
+         *  - $range_to % 10 == 9 AND
+         *  - all digits of $range_from < all digits of $range_to
+         */
+        $can_express_1 = (($range_to - $range_from) < 10) &&
+                            (($range_from % 10) <= ($range_to % 10));        
+        $can_express_2 = ($range_from % 10 == 0) && ($range_to % 10 == 9);
+
+        $from_len = strlen($range_from);
+        $i = 0;
+        //use a while so we break out as soon as condition false
+        while (!$can_express_1 && $can_express_2 && ($i < $from_len)) {
+            $can_express_2 &= ($range_to[$i] >= $range_from[$i]);
+            $i++;
+        }
+
+        //build the expression if we can
+        if ($can_express_1 || $can_express_2) {
+            $pattern = null;
+            for ($i = 0; $i < $from_len; $i++) {
+                if ($range_from[$i] == $range_to[$i]) {
+                    $pattern .= $range_from[$i];
+                } else {
+                    $pattern .= "[" . $range_from[$i] . "-" . $range_to[$i] . "]";
+                }
+            }
+            print_r("exp".$pattern."\r\n");
+            $regex[] = $pattern;
+        } else {
+            /*
+             * If we can't express as a regex, split into ranges and recurse
+             */
+
+            $sub_from = $range_from;
+            $safety=0;
+            while (($sub_from <= $range_to) && ($safety<30)) {
+                $safety++;
+                if ($sub_from == $range_to) {
+                    print_r("single");
+                    //the top range is a single match
+                    $regex[] = $range_to;
+                    break;
+                } elseif ((($range_to - $sub_from) < 10) &&
+                            (($sub_from % 10) <= ($range_to % 10))) {
+                    print_r("tens");
+                    $sub_to = $range_to;
+                } elseif (($sub_from % 10) != 0) {
+                    print_r("to9");
+                    // we can only go to 9 in this range
+                    $sub_to = (floor($sub_from / 10) * 10) + 9;
+                } else {
+                    //try to do a full order of magnitude
+                    $oom = pow(10, floor(log10($sub_from)));
+                    $max = ($oom * (1 + floor($sub_from / $oom))) - 1;
+                    
+                    if (($max <= $range_to) && ($max > $sub_from)) {
+                        $sub_to = $max;
+                        print_r("fulloom");
+                    } else {
+                        //work down hundreds, tens, etc
+                        $diff = $range_to - $sub_from;
+                        $oom = pow(10, floor(log10($diff)));
+                        print_r("hunten $diff $oom ");
+                        $sub_to = $sub_from + (($oom * floor($diff / $oom)) - 1);
+                        print_r($sub_to);
+                    }
+                }
+
+                //don't overflow the search range
+                if ($sub_to > $range_to) {
+                    $sub_to = $range_to;
+                }
+                print_r("\r\n");
+                $this->compile_range($sub_from, $sub_to, $recurse_level, $regex);
+                $sub_from = $sub_to + 1;
             }
         }
-
-        $factor = $len - $i;
-        $factor = pow(10, ($factor - 1));
-        //round lower one up to 10^(len-1) eg 10^2 = 100 = 200 (128>200)
-        $low_bound = $range_from - ($factor * $common * 10);
-        $low_bound = ceil($low_bound / $factor) * $factor;
-
-        //round upper down to 10^(len-1) eg 500 and -1 (199)
-        $high_bound = $range_to - ($factor * $common * 10);
-        $high_bound = (floor(($high_bound + 1 ) / $factor) * $factor) - 1;
-
-        //common range is 003200-003499. 003[2-4][0-9]{2}. No common range
-        if ($low_bound > $high_bound) {
-            $regex .= $this->compile_range($range_from, $common . $high_bound, $regex . "|");
-            return $this->compile_range($common . $low_bound, $range_to, $regex . "|");
-        } elseif (!strncasecmp($low_bound, $high_bound, 1)) {
-            $range_group = substr($low_bound, 0, 1);
+        $recurse_level--;
+        if ($first_recursion) {
+            $recurse_level = 0;
+            return "(" . implode("|", $regex) . ")";
         } else {
-            $range_group = "[" . substr($low_bound, 0, 1) . "-" . substr($high_bound, 0, 1) . "]";
+            return null;
         }
-
-        $range_extras = $len - $i - 1;
-        if ($range_extras == 1) {
-            $range_group .="[0-9]";
-        } elseif ($range_extras > 1) {
-            $range_group .= "[0-9]{" . $range_extras . "}";
-        }
-
-        $regex .= $common . $range_group . "|";
-
-        //now we need to do 003128-003199
-        $low_subrange = $common . ($low_bound - 1);
-        if ($range_from < $low_subrange) {
-            $regex = $this->compile_range($range_from, $low_subrange, $regex);
-        }
-        //and 003500 - 003549
-        $high_subrange = $common . ($high_bound + 1);
-        if ($high_subrange < $range_to) {
-            $regex = $this->compile_range($high_subrange, $range_to, $regex);
-        }
-        return $regex;
     }
-
 }
