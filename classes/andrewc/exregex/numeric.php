@@ -187,8 +187,7 @@ class Andrewc_Exregex_Numeric {
          */
 
         $sub_from = $range_from;
-        for ($i = 1; $range_to >= pow(10, $i); $i++) {
-            $oom = pow(10, $i);
+        for ($oom = 10; $range_to >= $oom; $oom = $oom * 10) {
             $rounded = ($oom * ceil($range_from / $oom)) - 1;
             if ($rounded > $range_to) {
                 break;
@@ -209,8 +208,7 @@ class Andrewc_Exregex_Numeric {
          *  - 3000 - 3499
          */
         $sub_to = $range_to;
-        for ($i = 1; $range_from >= pow(10, $i); $i++) {
-            $oom = pow(10, $i);
+        for ($oom = 10; $range_from >= $oom; $oom = $oom * 10) {
             $rounded = $oom * floor($range_to / $oom);
             if ($rounded < $range_from) {
                 break;
