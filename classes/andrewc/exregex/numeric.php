@@ -189,12 +189,14 @@ class Andrewc_Exregex_Numeric {
         $sub_from = $range_from;
         for ($i = 1; $range_to >= pow(10, $i); $i++) {
             $oom = pow(10, $i);
-            $rounded = $oom * ceil($range_from / $oom);
-            if (($rounded - 1) > $range_to) {
+            $rounded = ($oom * ceil($range_from / $oom)) - 1;
+            if ($rounded > $range_to) {
                 break;
             }
-            $ranges[] = array($sub_from, $rounded - 1);
-            $sub_from = $rounded;
+            if ($rounded >= $sub_from) {
+                $ranges[] = array($sub_from, $rounded);
+                $sub_from = $rounded + 1;
+            }
         }
 
         /*
