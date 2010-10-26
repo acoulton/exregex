@@ -20,7 +20,7 @@ defined('SYSPATH') or die('No direct script access.');
  * and [Exregex_Numeric::replace] methods which are wrappers for the preg_match
  * and preg_replace functions.
  *
- * [!!] Currently, all numbers must be given as equal length strings left-padded with zeroes if required.
+ * [!!] Currently the regex is not optimised for size of range.
  *
  * ### Configuration Options
  * Configuration is controlled by exregex.php, although key options can also be set
@@ -152,7 +152,7 @@ class Andrewc_Exregex_Numeric {
             foreach ($matchesarray as $match_range) {
                 list($from, $to) = explode('-', $match_range[1]);
                 $this->_compiled_pattern = str_replace($match_range[0],
-                                "(" . trim($this->compile_range($from, $to),"|") . ")",
+                                $this->compile_range($from, $to),
                                 $this->_raw_pattern);
             }
         }
@@ -160,76 +160,94 @@ class Andrewc_Exregex_Numeric {
     }
 
     /**
-     * Recursive function that compiles a numeric range into a regex pattern.
-     * @param string $from The lower limit of the range
-     * @param string $to The upper limit of the range
-     * @param string $first_recursion Whether this is the first recursion
-     * @return string The compiled pattern
-     */
-
-    /**
-     * Recursive function that compiles a numeric range into a regex pattern.
+     * Function that compiles a numeric range into a regex pattern.
      * @param string $range_from The lower limit of the range
-     * @param string $range_to The upper limit of the range
-     * @param string $regex Internal param used during recursion to pass the pattern as built
+     * @param string $range_to The upper limit of the range     
      * @return string
      */
-    protected function compile_range($range_from, $range_to, $regex = "") {
-        if ($range_from == $range_to) {
-            return $regex . $range_from;
-        }
+    protected function compile_range($range_from, $range_to) {
+        $number_len = max(array(strlen($range_from),
+                    strlen($range_to)));
 
-        //get the common part of the string eg 003(128 - 549) 003(128-249)
-        $common = "";
-        $len = strlen($range_from);
-        for ($i = 0; $i < $len; $i++) {
-            if (substr($range_from, $i, 1) == substr($range_to, $i, 1)) {
-                $common .= substr($range_from, $i, 1);
-            } else {
+        //pad with leading zeroes
+        $range_from = str_pad($range_from, $number_len, "0", STR_PAD_LEFT);
+        $range_to = str_pad($range_to, $number_len, "0", STR_PAD_LEFT);
+
+        /*
+         * The range must be broken into constituent [0-9]{x} ranges, with a
+         * [x-9] range at the beginning and a [0-x] range at the end.
+         *
+         * Begin by working up orders of magnitude to find all the 9-endings less
+         * than the range end target.
+         *
+         * 1187-3596 will give ranges:
+         *  - 1187 - 1189
+         *  - 1190 - 1199
+         *  - 1200 - 1999
+         */
+
+        $sub_from = $range_from;
+        for ($i = 1; $range_to >= pow(10, $i); $i++) {
+            $oom = pow(10, $i);
+            $rounded = $oom * ceil($range_from / $oom);
+            if (($rounded - 1) > $range_to) {
                 break;
             }
+            $ranges[] = array($sub_from, $rounded - 1);
+            $sub_from = $rounded;
         }
 
-        $factor = $len - $i;
-        $factor = pow(10, ($factor - 1));
-        //round lower one up to 10^(len-1) eg 10^2 = 100 = 200 (128>200)
-        $low_bound = $range_from - ($factor * $common * 10);
-        $low_bound = ceil($low_bound / $factor) * $factor;
-
-        //round upper down to 10^(len-1) eg 500 and -1 (199)
-        $high_bound = $range_to - ($factor * $common * 10);
-        $high_bound = (floor(($high_bound + 1 ) / $factor) * $factor) - 1;
-
-        //common range is 003200-003499. 003[2-4][0-9]{2}. No common range
-        if ($low_bound > $high_bound) {
-            $regex .= $this->compile_range($range_from, $common . $high_bound, $regex . "|");
-            return $this->compile_range($common . $low_bound, $range_to, $regex . "|");
-        } elseif (!strncasecmp($low_bound, $high_bound, 1)) {
-            $range_group = substr($low_bound, 0, 1);
-        } else {
-            $range_group = "[" . substr($low_bound, 0, 1) . "-" . substr($high_bound, 0, 1) . "]";
+        /*
+         * Now process the inverse, working from the target number and slowly
+         * rounding each order of magnitude off to zero.
+         *
+         * 1187 - 3596 will give ranges:
+         *  - 3590 - 3596
+         *  - 3500 - 3589
+         *  - 3000 - 3499
+         */
+        $sub_to = $range_to;
+        for ($i = 1; $range_from >= pow(10, $i); $i++) {
+            $oom = pow(10, $i);
+            $rounded = $oom * floor($range_to / $oom);
+            if ($rounded < $range_from) {
+                break;
+            }
+            $ranges[] = array($rounded, $sub_to);
+            $sub_to = $rounded - 1;
         }
 
-        $range_extras = $len - $i - 1;
-        if ($range_extras == 1) {
-            $range_group .="[0-9]";
-        } elseif ($range_extras > 1) {
-            $range_group .= "[0-9]{" . $range_extras . "}";
+        /*
+         * There may be a range between the worked-up-9 and worked-down-0 ranges
+         * in the case of 1187 - 3596, 2000 - 2999. Process this.
+         */
+        if ($sub_from <= $sub_to) {
+            $ranges[] = array($sub_from, $sub_to);
         }
 
-        $regex .= $common . $range_group . "|";
+        /*
+         * Assemble the range matches
+         */
+        foreach ($ranges as $range) {
+            list ($from, $to) = $range;
+            $from = str_pad($from, $number_len, "0", STR_PAD_LEFT);
+            $to = str_pad($to, $number_len, "0", STR_PAD_LEFT);
 
-        //now we need to do 003128-003199
-        $low_subrange = $common . ($low_bound - 1);
-        if ($range_from < $low_subrange) {
-            $regex = $this->compile_range($range_from, $low_subrange, $regex);
+            $pattern = "";
+            for ($i = 0; $i < $number_len; $i++) {
+                if ($from[$i] == $to[$i]) {
+                    $pattern .= $from[$i];
+                } else {
+                    $pattern .= "[" . $from[$i] . "-" . $to[$i] . "]";
+                }
+            }
+            $patterns[] = $pattern;
         }
-        //and 003500 - 003549
-        $high_subrange = $common . ($high_bound + 1);
-        if ($high_subrange < $range_to) {
-            $regex = $this->compile_range($high_subrange, $range_to, $regex);
-        }
-        return $regex;
+
+        /*
+         * Return the compiled alternations as a capture group
+         */
+        return "(" . implode("|", $patterns) . ")";
     }
 
 }
