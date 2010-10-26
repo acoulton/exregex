@@ -174,13 +174,13 @@ class Andrewc_Exregex_Numeric {
         static $recurse_level = 0;
         static $regex = array();
         static $number_len = null;
-        static $first_call=0;
+        static $first_call = 0;
         if ($first_call == 0) {
             $first_call = time();
         }
 
         if ($first_call < (time() - 5)) {
-            die ("Timeout");
+            die("Timeout");
         }
 
         if ($recurse_level > 50) {
@@ -191,7 +191,7 @@ class Andrewc_Exregex_Numeric {
             $first_recursion = true;
             $regex = array();
             $number_len = max(array(strlen($range_from),
-                                    strlen($range_to)));
+                        strlen($range_to)));
         } else {
             $first_recursion = false;
         }
@@ -202,26 +202,30 @@ class Andrewc_Exregex_Numeric {
 
         $recurse_level++;
         print_r("L$recurse_level - called $range_from:$range_to - \r\n");
-        
+
         /*
          * Try to express the range as a regex. We can do this if:
          *  - less than 10 difference and no digit rollover OR
-         *  - $range_from % 10 == 0 AND
-         *  - $range_to % 10 == 9 AND
-         *  - all digits of $range_from < all digits of $range_to
+         *  - all digits the same or 0-9
          */
         $can_express_1 = (($range_to - $range_from) < 10) &&
-                            (($range_from % 10) <= ($range_to % 10));        
-        $can_express_2 = ($range_from % 10 == 0) && ($range_to % 10 == 9);
+                (($range_from % 10) <= ($range_to % 10));
 
         $from_len = strlen($range_from);
         $i = 0;
-        //use a while so we break out as soon as condition false
-        while (!$can_express_1 && $can_express_2 && ($i < $from_len)) {
-            $can_express_2 &= ($range_to[$i] >= $range_from[$i]);
-            $i++;
-        }
 
+        if (!$can_express_1) {
+            $can_express_2 = true;
+            //use a while so we break out as soon as condition false
+            while ($can_express_2 && ($i < $from_len)) {
+                $can_express_2 &= ( ($range_from[$i] == $range_to[$i]) ||
+                        (($range_from[$i] == 0) && ($range_to[i] == 9)));
+                $i++;
+            }
+        } else {
+            $can_express_2 = false;
+        }
+        
         //build the expression if we can
         if ($can_express_1 || $can_express_2) {
             $pattern = null;
@@ -232,7 +236,7 @@ class Andrewc_Exregex_Numeric {
                     $pattern .= "[" . $range_from[$i] . "-" . $range_to[$i] . "]";
                 }
             }
-            print_r("exp".$pattern."\r\n");
+            print_r("exp" . $pattern . "\r\n");
             $regex[] = $pattern;
         } else {
             /*
@@ -240,8 +244,8 @@ class Andrewc_Exregex_Numeric {
              */
 
             $sub_from = $range_from;
-            $safety=0;
-            while (($sub_from <= $range_to) && ($safety<30)) {
+            $safety = 0;
+            while (($sub_from <= $range_to) && ($safety < 30)) {
                 $safety++;
                 if ($sub_from == $range_to) {
                     print_r("single");
@@ -249,7 +253,7 @@ class Andrewc_Exregex_Numeric {
                     $regex[] = $range_to;
                     break;
                 } elseif ((($range_to - $sub_from) < 10) &&
-                            (($sub_from % 10) <= ($range_to % 10))) {
+                        (($sub_from % 10) <= ($range_to % 10))) {
                     print_r("tens");
                     $sub_to = $range_to;
                 } elseif (($sub_from % 10) != 0) {
@@ -257,10 +261,16 @@ class Andrewc_Exregex_Numeric {
                     // we can only go to 9 in this range
                     $sub_to = (floor($sub_from / 10) * 10) + 9;
                 } else {
+
+                    for ($i=9; )
+                    //work from the right in
+                    for ($i = $from_len; $i>0; $i++) {
+                        if ($sub_from)
+                    }
                     //try to do a full order of magnitude
                     $oom = pow(10, floor(log10($sub_from)));
                     $max = ($oom * (1 + floor($sub_from / $oom))) - 1;
-                    
+
                     if (($max <= $range_to) && ($max > $sub_from)) {
                         $sub_to = $max;
                         print_r("fulloom");
@@ -291,4 +301,5 @@ class Andrewc_Exregex_Numeric {
             return null;
         }
     }
+
 }
