@@ -155,7 +155,7 @@ class Andrewc_Exregex_Numeric {
                                 $this->compile_range($from, $to),
                                 $this->_raw_pattern);
             }
-        }
+        }        
         return $this->_compiled_pattern;
     }
 
@@ -225,6 +225,8 @@ class Andrewc_Exregex_Numeric {
             $ranges[] = array($sub_from, $sub_to);
         }
 
+        usort($ranges, array($this, "_compare_range_array"));
+        
         /*
          * Assemble the range matches
          */
@@ -248,6 +250,19 @@ class Andrewc_Exregex_Numeric {
          * Return the compiled alternations as a capture group
          */
         return "(" . implode("|", $patterns) . ")";
+    }
+
+    /**
+     * Comparison function used by the compiler when building a range to sort
+     * regex segments into the most efficient sequence 
+     * @param array $a
+     * @param array $b
+     * @return int
+     */
+    public function _compare_range_array($a , $b) {
+        $a_size = $a[1] - $a[0];
+        $b_size = $b[1] - $b[0];
+        return $b_size - $a_size;
     }
 
 }
