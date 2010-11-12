@@ -155,7 +155,9 @@ class Andrewc_Exregex_Numeric {
                                 $this->compile_range($from, $to),
                                 $this->_raw_pattern);
             }
-        }        
+        } else {
+            $this->_compiled_pattern = $this->_raw_pattern;
+        }
         return $this->_compiled_pattern;
     }
 

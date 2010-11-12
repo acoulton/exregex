@@ -82,4 +82,10 @@ Class Exregex_NumericTest extends Kohana_Unittest_TestCase {
         $this->assertNull($failed_ranges);
     }
 
+    public function test_standardregexunchanged() {
+        $regstr = '/([a-z0-9]+)/';
+        $regex = new Exregex_Numeric($regstr);
+        $this->assertEquals($regstr, $regex->get_compiled_pattern());
+    }
+
 }
