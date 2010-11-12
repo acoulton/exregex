@@ -217,6 +217,9 @@ class Andrewc_Exregex_Numeric {
             }
             $ranges[] = array($rounded, $sub_to);
             $sub_to = $rounded - 1;
+            if ($rounded == $range_to) {
+                break;
+            }
         }
 
         /*
